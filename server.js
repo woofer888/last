@@ -54,6 +54,7 @@ app.post('/helius', (req, res) => {
                     
                     let buyer = null;
                     let solAmount = 0;
+                    let maxSol = 0;
                     
                     for (const t of transfers) {
                         // Detect buyer (receiving tracked token)
@@ -64,18 +65,21 @@ app.post('/helius', (req, res) => {
                             buyer = t.toUserAccount;
                         }
                         
-                        // Sum ALL WSOL transfers
+                        // Detect WSOL transfers and find largest absolute tokenAmount
                         if (
                             t.mint === WSOL_MINT
                         ) {
-                            solAmount += Number(t.tokenAmount || 0);
+                            const amount = Math.abs(Number(t.tokenAmount || 0));
+                            if (amount > maxSol) {
+                                maxSol = amount;
+                            }
                         }
                     }
                     
                     // Convert from lamports to SOL
-                    solAmount = solAmount / 1_000_000_000;
+                    solAmount = maxSol / 1_000_000_000;
                     
-                    if (buyer && solAmount > 0) {
+                    if (buyer && solAmount > 0.0001) {
                         console.log("BUY DETECTED", buyer, solAmount);
                         
                         // Broadcast to all connected WebSocket clients
