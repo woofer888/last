@@ -77,9 +77,6 @@ app.post('/helius', (req, res) => {
                         }
                     }
                     
-                    // Convert from lamports to SOL
-                    maxSol = maxSol / 1_000_000_000;
-                    
                     if (buyer) {
                         console.log("BUY DETECTED", buyer, maxSol);
                         
