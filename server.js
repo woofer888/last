@@ -34,6 +34,10 @@ app.post('/helius', (req, res) => {
         // Process each transaction in the webhook
         if (webhook && Array.isArray(webhook)) {
             webhook.forEach(tx => {
+                // Temporary logging to debug transaction structure
+                console.log("TYPE:", tx.type);
+                console.log("SOURCE:", tx.source);
+                
                 // Process SWAP transactions from PUMP or PUMPSWAP
                 if (tx.type === "SWAP" && tx.source && (tx.source.includes("PUMP") || tx.source.includes("PUMPSWAP"))) {
                     // Check account data for native balance changes
