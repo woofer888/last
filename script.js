@@ -765,13 +765,73 @@ function initBuysList() {
     setInterval(updateTimestamps, 1000);
 }
 
+// WebSocket connection for buy notifications
+let buyWebSocket = null;
+
+function connectBuyWebSocket() {
+    try {
+        buyWebSocket = new WebSocket('wss://last-production-af73.up.railway.app');
+        
+        buyWebSocket.onopen = () => {
+            console.log('WebSocket connected to buy server');
+        };
+        
+        buyWebSocket.onmessage = (event) => {
+            try {
+                const data = JSON.parse(event.data);
+                console.log('Buy received:', data);
+                
+                // Add buy to the existing buys list using the same function as PumpFun
+                if (data.wallet && data.sol !== undefined) {
+                    const wallet = data.wallet;
+                    // Extract last 4 characters of wallet for display (uppercase, matching PumpFun format)
+                    const walletShort = wallet.length >= 4 ? wallet.slice(-4).toUpperCase() : wallet.toUpperCase();
+                    
+                    // Convert incoming sol value to Number and format based on size
+                    const solValue = Number(data.sol);
+                    let formattedSol;
+                    if (solValue < 0.01) {
+                        formattedSol = solValue.toFixed(6);
+                    } else {
+                        formattedSol = solValue.toFixed(2);
+                    }
+                    
+                    console.log('✅ Adding buy from WebSocket:', formattedSol, 'SOL from', walletShort);
+                    
+                    // Use addBuy() to maintain consistent styling and behavior
+                    // Pass short wallet for display, full wallet for storage (matching PumpFun format)
+                    addBuy(formattedSol, walletShort, 0, null, wallet);
+                }
+            } catch (error) {
+                console.error('Error parsing WebSocket message:', error);
+            }
+        };
+        
+        buyWebSocket.onerror = (error) => {
+            console.error('WebSocket error:', error);
+        };
+        
+        buyWebSocket.onclose = () => {
+            console.log('WebSocket disconnected, reconnecting in 3 seconds...');
+            setTimeout(connectBuyWebSocket, 3000);
+        };
+    } catch (error) {
+        console.error('Error connecting WebSocket:', error);
+        setTimeout(connectBuyWebSocket, 3000);
+    }
+}
+
 // Initialize
 createParticles();
 // Timer will start when first buy of 0.2 SOL or more happens
 initBuysList();
+connectBuyWebSocket();
 
-// Cleanup WebSocket on page unload
+// Cleanup WebSockets on page unload
 window.addEventListener('beforeunload', () => {
+    if (buyWebSocket) {
+        buyWebSocket.close();
+    }
     if (pumpfunWS && isWSConnected) {
         pumpfunWS.close();
     }
