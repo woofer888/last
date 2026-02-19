@@ -29,6 +29,8 @@ app.use(express.json());
 
 // Tracked token mint address
 const TRACKED_MINT = process.env.TRACKED_MINT || 'GnkitxfvNLGGsXKGckU2Bw9uEnzwmVmJKzTaHpp1pump';
+// WSOL mint address
+const WSOL_MINT = 'So11111111111111111111111111111111111111112';
 
 // Flag to log first transaction only
 let hasLoggedFirstTransaction = false;
@@ -48,47 +50,42 @@ app.post('/helius', (req, res) => {
                 
                 // Process SWAP transactions only
                 if (tx.type === "SWAP") {
-                    // Find SOL payer from nativeTransfers array
-                    if (tx.nativeTransfers && Array.isArray(tx.nativeTransfers)) {
-                        tx.nativeTransfers.forEach(nativeTransfer => {
-                            // Buyer is the user where SOL is sent OUT (fromUserAccount)
-                            const buyer = nativeTransfer.fromUserAccount;
-                            const solAmountLamports = nativeTransfer.amount || 0;
+                    if (tx.tokenTransfers && Array.isArray(tx.tokenTransfers)) {
+                        // A) Find transfer where mint equals tracked token mint and toUserAccount exists → This is the BUYER
+                        const trackedTokenTransfer = tx.tokenTransfers.find(transfer => 
+                            transfer.mint === TRACKED_MINT &&
+                            transfer.toUserAccount
+                        );
+                        
+                        // B) Find transfer where mint === WSOL → This is WSOL transfer
+                        const wsolTransfer = tx.tokenTransfers.find(transfer => 
+                            transfer.mint === WSOL_MINT
+                        );
+                        
+                        // BUY confirmed: buyer received tracked tokens and WSOL transfer exists
+                        if (trackedTokenTransfer && wsolTransfer && trackedTokenTransfer.toUserAccount) {
+                            const buyer = trackedTokenTransfer.toUserAccount;
+                            // Use WSOL tokenAmount as SOL amount (convert from token amount to SOL)
+                            const solAmount = wsolTransfer.tokenAmount / 1_000_000_000;
                             
-                            if (buyer && solAmountLamports > 0) {
-                                // Confirm BUY by checking tokenTransfers
-                                if (tx.tokenTransfers && Array.isArray(tx.tokenTransfers)) {
-                                    const tokenTransfer = tx.tokenTransfers.find(transfer => 
-                                        transfer.toUserAccount === buyer &&
-                                        transfer.mint === TRACKED_MINT &&
-                                        transfer.tokenAmount > 0
-                                    );
-                                    
-                                    // BUY confirmed: buyer sent SOL and received tracked tokens
-                                    if (tokenTransfer) {
-                                        const solAmount = solAmountLamports / 1_000_000_000;
-                                        
-                                        console.log('BUY:');
-                                        console.log(`Wallet: ${buyer}`);
-                                        console.log(`SOL: ${solAmount}`);
-                                        
-                                        // Broadcast to all connected WebSocket clients
-                                        const buyData = {
-                                            wallet: buyer,
-                                            sol: solAmount,
-                                            timestamp: Date.now()
-                                        };
-                                        
-                                        const message = JSON.stringify(buyData);
-                                        clients.forEach((client) => {
-                                            if (client.readyState === WebSocket.OPEN) {
-                                                client.send(message);
-                                            }
-                                        });
-                                    }
+                            console.log('BUY:');
+                            console.log(`Wallet: ${buyer}`);
+                            console.log(`SOL: ${solAmount}`);
+                            
+                            // Broadcast to all connected WebSocket clients
+                            const buyData = {
+                                wallet: buyer,
+                                sol: solAmount,
+                                timestamp: Date.now()
+                            };
+                            
+                            const message = JSON.stringify(buyData);
+                            clients.forEach((client) => {
+                                if (client.readyState === WebSocket.OPEN) {
+                                    client.send(message);
                                 }
-                            }
-                        });
+                            });
+                        }
                     }
                 }
             });
