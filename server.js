@@ -34,33 +34,36 @@ app.post('/helius', (req, res) => {
         // Process each transaction in the webhook
         if (webhook && Array.isArray(webhook)) {
             webhook.forEach(tx => {
-                // Check account data for native balance changes
-                if (tx.accountData && Array.isArray(tx.accountData)) {
-                    tx.accountData.forEach(account => {
-                        // Buy = nativeBalanceChange is negative (money going out)
-                        if (account.nativeBalanceChange && account.nativeBalanceChange < 0) {
-                            const wallet = account.account || account.userAccount || 'Unknown';
-                            const solAmount = Math.abs(account.nativeBalanceChange) / 1_000_000_000;
-                            
-                            console.log('BUY:');
-                            console.log(`Wallet: ${wallet}`);
-                            console.log(`SOL: ${solAmount}`);
-                            
-                            // Broadcast to all connected WebSocket clients
-                            const buyData = {
-                                wallet: wallet,
-                                sol: solAmount,
-                                timestamp: Date.now()
-                            };
-                            
-                            const message = JSON.stringify(buyData);
-                            clients.forEach((client) => {
-                                if (client.readyState === WebSocket.OPEN) {
-                                    client.send(message);
-                                }
-                            });
-                        }
-                    });
+                // Only process SWAP transactions from PUMP
+                if (tx.type === "SWAP" && tx.source && tx.source.includes("PUMP")) {
+                    // Check account data for native balance changes
+                    if (tx.accountData && Array.isArray(tx.accountData)) {
+                        tx.accountData.forEach(account => {
+                            // Buy = nativeBalanceChange is negative (money going out)
+                            if (account.nativeBalanceChange && account.nativeBalanceChange < 0) {
+                                const wallet = account.account || account.userAccount || 'Unknown';
+                                const solAmount = Math.abs(account.nativeBalanceChange) / 1_000_000_000;
+                                
+                                console.log('BUY:');
+                                console.log(`Wallet: ${wallet}`);
+                                console.log(`SOL: ${solAmount}`);
+                                
+                                // Broadcast to all connected WebSocket clients
+                                const buyData = {
+                                    wallet: wallet,
+                                    sol: solAmount,
+                                    timestamp: Date.now()
+                                };
+                                
+                                const message = JSON.stringify(buyData);
+                                clients.forEach((client) => {
+                                    if (client.readyState === WebSocket.OPEN) {
+                                        client.send(message);
+                                    }
+                                });
+                            }
+                        });
+                    }
                 }
             });
         }
