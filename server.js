@@ -34,15 +34,18 @@ app.post('/helius', (req, res) => {
         // Process each transaction in the webhook
         if (webhook && Array.isArray(webhook)) {
             webhook.forEach(tx => {
-                // Only process SWAP transactions from PUMP
-                if (tx.type === "SWAP" && tx.source && tx.source.includes("PUMP")) {
+                // Process SWAP and TRANSFER transactions from PUMP
+                if (tx.source && tx.source.includes("PUMP") && (tx.type === "SWAP" || tx.type === "TRANSFER")) {
                     // Check account data for native balance changes
                     if (tx.accountData && Array.isArray(tx.accountData)) {
                         tx.accountData.forEach(account => {
-                            // Buy = nativeBalanceChange is negative (money going out)
-                            if (account.nativeBalanceChange && account.nativeBalanceChange < 0) {
+                            // Buy = nativeBalanceChange is negative (money going out) AND token balance increases
+                            const nativeBalanceChange = account.nativeBalanceChange || 0;
+                            const tokenBalanceChange = account.tokenBalanceChange || account.tokenBalance || 0;
+                            
+                            if (nativeBalanceChange < 0 && tokenBalanceChange > 0) {
                                 const wallet = account.account || account.userAccount || 'Unknown';
-                                const solAmount = Math.abs(account.nativeBalanceChange) / 1_000_000_000;
+                                const solAmount = Math.abs(nativeBalanceChange) / 1_000_000_000;
                                 
                                 console.log('BUY:');
                                 console.log(`Wallet: ${wallet}`);
