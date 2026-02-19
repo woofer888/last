@@ -44,28 +44,23 @@ app.post('/helius', (req, res) => {
                     let buyer = null;
                     let solSpent = 0;
 
-                    const nativeChanges = tx.nativeBalanceChanges || [];
                     const transfers = tx.tokenTransfers || [];
 
-                    for (const change of nativeChanges) {
-                        if (change.nativeBalanceChange < 0) {
-                            const wallet = change.userAccount;
-                            const sol = Math.abs(change.nativeBalanceChange) / 1e9;
+                    for (const t of transfers) {
+                        // detect tracked token received
+                        if (t.mint === TRACKED_TOKEN_MINT && t.toUserAccount) {
+                            buyer = t.toUserAccount;
+                        }
 
-                            const received = transfers.find(t =>
-                                t.mint === TRACKED_TOKEN_MINT &&
-                                t.toUserAccount === wallet
-                            );
-
-                            if (received) {
-                                buyer = wallet;
-                                solSpent = sol;
-                                break;
+                        // detect WSOL spent
+                        if (t.mint === WSOL_MINT) {
+                            if (t.fromUserAccount) {
+                                solSpent = Number(t.tokenAmount);
                             }
                         }
                     }
 
-                    if (buyer) {
+                    if (buyer && solSpent > 0) {
                         console.log("BUY DETECTED", buyer, solSpent);
 
                         // Broadcast to all connected WebSocket clients
