@@ -1,5 +1,29 @@
 const express = require('express');
+const http = require('http');
+const WebSocket = require('ws');
+
 const app = express();
+const server = http.createServer(app);
+
+// Create WebSocket server
+const wss = new WebSocket.Server({ server });
+
+// Store connected clients
+const clients = new Set();
+
+wss.on('connection', (ws) => {
+    clients.add(ws);
+    console.log('WebSocket client connected. Total clients:', clients.size);
+    
+    ws.on('close', () => {
+        clients.delete(ws);
+        console.log('WebSocket client disconnected. Total clients:', clients.size);
+    });
+    
+    ws.on('error', (error) => {
+        console.error('WebSocket error:', error);
+    });
+});
 
 app.use(express.json());
 
@@ -21,6 +45,20 @@ app.post('/helius', (req, res) => {
                             console.log('BUY:');
                             console.log(`Wallet: ${wallet}`);
                             console.log(`SOL: ${solAmount}`);
+                            
+                            // Broadcast to all connected WebSocket clients
+                            const buyData = {
+                                wallet: wallet,
+                                sol: solAmount,
+                                timestamp: Date.now()
+                            };
+                            
+                            const message = JSON.stringify(buyData);
+                            clients.forEach((client) => {
+                                if (client.readyState === WebSocket.OPEN) {
+                                    client.send(message);
+                                }
+                            });
                         }
                     });
                 }
@@ -34,8 +72,9 @@ app.post('/helius', (req, res) => {
     }
 });
 
-app.listen(3000, () => {
+server.listen(3000, () => {
     console.log('Server listening on port 3000');
+    console.log('WebSocket server ready');
 });
 
 
