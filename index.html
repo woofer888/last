@@ -1,0 +1,171 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Casino Jackpot Timer</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="top-buttons">
+        <button class="info-button" id="infoButton" type="button">INFO</button>
+        <a href="https://x.com" target="_blank" rel="noopener noreferrer" class="x-logo">
+            <svg viewBox="0 0 24 24" fill="currentColor" width="24" height="24">
+                <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"/>
+            </svg>
+        </a>
+    </div>
+    
+    <div class="buys-list-wrapper">
+        <div class="list-label list-label-buys">Recent buys</div>
+        <div class="buys-list" id="buysList">
+            <!-- Buys will be dynamically added here -->
+        </div>
+    </div>
+    
+    <div class="winners-list-wrapper">
+        <div class="list-label list-label-winners">Recent winners</div>
+        <div class="winners-list" id="winnersList">
+            <!-- Winners will be dynamically added here -->
+        </div>
+        <div class="winners-scroll-indicator" id="winnersScrollIndicator" aria-hidden="true">
+            <div class="scroll-arrows-up">
+                <svg viewBox="0 0 24 24" width="20" height="20">
+                    <path d="M6 18 L12 14 L18 18" stroke="currentColor" stroke-width="1.5" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+                    <path d="M6 13 L12 9 L18 13" stroke="currentColor" stroke-width="1.5" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+                    <path d="M6 8 L12 4 L18 8" stroke="currentColor" stroke-width="1.5" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+                </svg>
+            </div>
+            <div class="scroll-arrows-down">
+                <svg viewBox="0 0 24 24" width="20" height="20">
+                    <path d="M6 6 L12 10 L18 6" stroke="currentColor" stroke-width="1.5" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+                    <path d="M6 11 L12 15 L18 11" stroke="currentColor" stroke-width="1.5" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+                    <path d="M6 16 L12 20 L18 16" stroke="currentColor" stroke-width="1.5" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+                </svg>
+            </div>
+        </div>
+    </div>
+    
+    <div class="container">
+        <div class="jackpot-display">
+            <div class="jackpot-label">JACKPOT</div>
+            <div class="jackpot-amount">
+                <span class="sol-icon">◎</span>
+                <span class="amount" id="jackpotAmount">4.8</span>
+                <span class="sol-text">SOL</span>
+            </div>
+        </div>
+
+        <div class="timer-container">
+            <div class="timer-wrapper">
+                <div class="timer-display" id="timerDisplay">10</div>
+            </div>
+        </div>
+
+        <div class="leading-buy-section" id="leadingBuySection">
+            <div class="leading-buy-label">Leading buy</div>
+            <div class="leading-buy-display" id="leadingBuyDisplay"></div>
+        </div>
+
+        <div class="winner-overlay" id="winnerOverlay">
+            <div class="winner-content">
+                <div class="winner-text">WINNER!</div>
+                <div class="winner-amount-display" id="winnerAmountDisplay"></div>
+                <div class="winner-wallet-display" id="winnerWalletDisplay"></div>
+                <div class="payout-status-text" id="payoutStatusText">Processing payout…</div>
+                <div class="new-round-text" id="newRoundText">New Round Starting<span class="dots"></span></div>
+            </div>
+        </div>
+    </div>
+
+    <div class="particles" id="particles"></div>
+
+    <div class="info-modal-overlay" id="infoModalOverlay">
+        <div class="info-modal-card">
+            <button class="info-modal-close" id="infoModalClose" aria-label="Close">&times;</button>
+            <div class="info-modal-content" id="infoModalContent">
+                <h2 class="info-modal-title">🎮 How <strong>$LAST</strong> Works</h2>
+                <p><strong>$LAST</strong> is a simple, high-intensity buy-and-hold game built on Solana. The rules are easy, but the tension is real. The goal is to be the final eligible buyer before the countdown ends.</p>
+                
+                <h3 class="info-modal-heading">🟢 How to Play</h3>
+                <p>To enter the game, you must buy at least <strong>0.5 SOL worth of $LAST</strong> tokens. Once you make a qualifying purchase, you become the current "LAST" buyer and the 20-second countdown begins.</p>
+                <p>If no other eligible buy (minimum 0.5 SOL) happens within the next 20 seconds, you win the jackpot.</p>
+                <p>If another player makes a qualifying buy before the timer reaches zero, the countdown resets and they become the new "LAST" buyer.</p>
+                
+                <h3 class="info-modal-heading">💰 Jackpot & Payouts</h3>
+                <p>If the timer reaches zero with no new eligible buys, the current "LAST" buyer automatically wins the jackpot. Payouts are handled automatically on-chain, and once the jackpot is paid, a new round immediately begins.</p>
+                
+                <h3 class="info-modal-heading">🎟 Eligibility Requirement</h3>
+                <p>To receive the jackpot payout, the wallet you use to play must hold at least <strong>1,000,000 $LAST</strong> tokens (0.1% of supply) at the time of payout. This requirement prevents quick in-and-out farming and ensures real participation in the ecosystem.</p>
+                
+                <h3 class="info-modal-heading">🔁 Endless Rounds</h3>
+                <p>After each jackpot is paid, the game resets and a new round starts automatically. Every qualifying buy restarts the 20-second timer, and every round creates a new chance to become the LAST.</p>
+                <p>The jackpot <strong>prize is always 50%</strong> of the total jackpot wallet balance at the time of payout. This ensures the jackpot never drains to zero, keeping the game sustainable and allowing it to continue indefinitely.</p>
+                
+                <p class="info-modal-tagline">Simple rules. Real tension. One winner each round.</p>
+            </div>
+            <div class="info-modal-scroll-indicator" id="infoModalScrollIndicator" aria-hidden="true">
+                <div class="scroll-arrows-up">
+                    <svg viewBox="0 0 24 24" width="20" height="20">
+                        <path d="M6 18 L12 14 L18 18" stroke="currentColor" stroke-width="1.5" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+                        <path d="M6 13 L12 9 L18 13" stroke="currentColor" stroke-width="1.5" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+                        <path d="M6 8 L12 4 L18 8" stroke="currentColor" stroke-width="1.5" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+                    </svg>
+                </div>
+                <div class="scroll-arrows-down">
+                    <svg viewBox="0 0 24 24" width="20" height="20">
+                        <path d="M6 6 L12 10 L18 6" stroke="currentColor" stroke-width="1.5" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+                        <path d="M6 11 L12 15 L18 11" stroke="currentColor" stroke-width="1.5" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+                        <path d="M6 16 L12 20 L18 16" stroke="currentColor" stroke-width="1.5" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+                    </svg>
+                </div>
+            </div>
+            <div class="info-modal-scroll-indicator right" id="infoModalScrollIndicatorRight" aria-hidden="true">
+                <div class="scroll-arrows-up">
+                    <svg viewBox="0 0 24 24" width="18" height="18">
+                        <path d="M6 18 L12 14 L18 18" stroke="currentColor" stroke-width="1.5" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+                        <path d="M6 13 L12 9 L18 13" stroke="currentColor" stroke-width="1.5" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+                        <path d="M6 8 L12 4 L18 8" stroke="currentColor" stroke-width="1.5" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+                    </svg>
+                </div>
+                <div class="scroll-arrows-down">
+                    <svg viewBox="0 0 24 24" width="18" height="18">
+                        <path d="M6 6 L12 10 L18 6" stroke="currentColor" stroke-width="1.5" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+                        <path d="M6 11 L12 15 L18 11" stroke="currentColor" stroke-width="1.5" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+                        <path d="M6 16 L12 20 L18 16" stroke="currentColor" stroke-width="1.5" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+                    </svg>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="bottom-buttons">
+        <div class="particles-panel">
+            <button class="particles-btn particles-direction" id="particlesDirection" aria-label="Reverse particles direction">
+                <svg class="icon-up" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M12 19V5M5 12l7-7 7 7"/>
+                </svg>
+                <svg class="icon-down" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M12 5v14M5 12l7 7 7-7"/>
+                </svg>
+            </button>
+            <span class="particles-divider"></span>
+            <button class="particles-btn particles-freeze" id="particlesFreeze" aria-label="Freeze particles">
+                <svg class="icon-play" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <circle cx="4" cy="12" r="1.5"></circle>
+                    <circle cx="10" cy="8" r="1.5"></circle>
+                    <circle cx="16" cy="14" r="1.5"></circle>
+                    <circle cx="20" cy="6" r="1.5"></circle>
+                </svg>
+                <svg class="icon-pause" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <rect x="6" y="4" width="4" height="16" rx="1"></rect>
+                    <rect x="14" y="4" width="4" height="16" rx="1"></rect>
+                </svg>
+            </button>
+        </div>
+    </div>
+
+    <script src="script.js"></script>
+</body>
+</html>
+
