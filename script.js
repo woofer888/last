@@ -790,7 +790,7 @@ function addBuyToUI(wallet, sol) {
 
 function connectBuyWebSocket() {
     try {
-        buyWebSocket = new WebSocket('wss://last-production-af73.up.railway.app');
+        buyWebSocket = new WebSocket('wss://last-production-af73.up.railway.app/ws');
         
         buyWebSocket.onopen = () => {
             console.log('WebSocket connected to buy server');
@@ -798,15 +798,12 @@ function connectBuyWebSocket() {
         
         buyWebSocket.onmessage = (event) => {
             try {
-                console.log("RAW MESSAGE:", event.data);
-
                 const data = JSON.parse(event.data);
 
-                console.log("PARSED DATA:", data);
-
-                if (!data.wallet || !data.sol) return;
-
-                addBuyToUI(data.wallet, data.sol);
+                // Only process BUY messages
+                if (data.type === "BUY" && data.wallet && data.sol) {
+                    addBuyToUI(data.wallet, data.sol);
+                }
             } catch (error) {
                 console.error('Error parsing WebSocket message:', error);
             }
