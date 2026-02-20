@@ -736,75 +736,39 @@ function initBuysList() {
     setInterval(updateTimestamps, 1000);
 }
 
-// WebSocket connection for buy notifications
-let buyWebSocket = null;
-
-function addBuyToUI(wallet, sol) {
-    // Extract last 4 characters of wallet for display (uppercase, matching PumpFun format)
-    const walletShort = wallet.length >= 4 ? wallet.slice(-4).toUpperCase() : wallet.toUpperCase();
-    
-    // Convert incoming sol value to Number and format based on size
-    const solValue = Number(sol);
-    let formattedSol;
-    if (solValue < 0.01) {
-        formattedSol = solValue.toFixed(6);
-    } else {
-        formattedSol = solValue.toFixed(2);
+// Poll /buys every 1s and replace recent buys UI (no WebSocket)
+function renderBuys(data) {
+    if (!buysList || !Array.isArray(data)) return;
+    buysList.innerHTML = "";
+    const now = Date.now();
+    for (const item of data) {
+        const walletShort = item.wallet && item.wallet.length >= 4
+            ? item.wallet.slice(-4).toUpperCase()
+            : (item.wallet || "????").toString().toUpperCase();
+        const sol = Number(item.sol);
+        const amount = sol < 0.01 ? sol.toFixed(6) : sol.toFixed(2);
+        const secondsAgo = item.time ? Math.max(0, Math.floor((now - item.time) / 1000)) : 0;
+        const buyItem = createBuyItem(amount, walletShort, secondsAgo);
+        buysList.appendChild(buyItem);
     }
-    
-    console.log('✅ Adding buy from WebSocket:', formattedSol, 'SOL from', walletShort);
-    
-    // Use addBuy() to maintain consistent styling and behavior
-    // Pass short wallet for display, full wallet for storage (matching PumpFun format)
-    addBuy(formattedSol, walletShort, 0, null, wallet);
 }
 
-function connectBuyWebSocket() {
-    try {
-        buyWebSocket = new WebSocket('wss://last-production-af73.up.railway.app/ws');
-        
-        buyWebSocket.onopen = () => {
-            console.log('WebSocket connected to buy server');
-        };
-        
-        buyWebSocket.onmessage = (event) => {
-            try {
-                const data = JSON.parse(event.data);
-
-                // Only process BUY messages
-                if (data.type === "BUY" && data.wallet && data.sol) {
-                    addBuyToUI(data.wallet, data.sol);
-                }
-            } catch (error) {
-                console.error('Error parsing WebSocket message:', error);
-            }
-        };
-        
-        buyWebSocket.onerror = (error) => {
-            console.error('WebSocket error:', error);
-        };
-        
-        buyWebSocket.onclose = () => {
-            console.log('WebSocket disconnected, reconnecting in 3 seconds...');
-            setTimeout(connectBuyWebSocket, 3000);
-        };
-    } catch (error) {
-        console.error('Error connecting WebSocket:', error);
-        setTimeout(connectBuyWebSocket, 3000);
-    }
+function pollBuys() {
+    fetch("/buys")
+        .then(res => res.json())
+        .then(data => renderBuys(data))
+        .catch(() => {});
 }
 
 // Initialize
 createParticles();
 // Timer will start when first buy of 0.2 SOL or more happens
 initBuysList();
-connectBuyWebSocket();
+pollBuys();
+setInterval(pollBuys, 1000);
 
 // Cleanup WebSockets on page unload
 window.addEventListener('beforeunload', () => {
-    if (buyWebSocket) {
-        buyWebSocket.close();
-    }
     if (pumpfunWS && isWSConnected) {
         pumpfunWS.close();
     }
