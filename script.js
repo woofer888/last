@@ -738,8 +738,6 @@ function initBuysList() {
 
 // WebSocket connection for buy notifications
 let buyWebSocket = null;
-const seenBuySignatures = new Set();
-const MAX_SEEN_SIGNATURES = 500;
 
 function addBuyToUI(wallet, sol) {
     // Extract last 4 characters of wallet for display (uppercase, matching PumpFun format)
@@ -772,20 +770,11 @@ function connectBuyWebSocket() {
         buyWebSocket.onmessage = (event) => {
             try {
                 const data = JSON.parse(event.data);
-                if (data.type !== "BUY" || !data.wallet || !data.sol) return;
-                // Dedupe: same tx can arrive twice (e.g. reconnects or server retries)
-                const sig = data.signature;
-                if (sig && seenBuySignatures.has(sig)) return;
-                if (sig) {
-                    seenBuySignatures.add(sig);
-                    if (seenBuySignatures.size > MAX_SEEN_SIGNATURES) {
-                        const arr = [...seenBuySignatures];
-                        arr.splice(0, arr.length - MAX_SEEN_SIGNATURES);
-                        seenBuySignatures.clear();
-                        arr.forEach((s) => seenBuySignatures.add(s));
-                    }
+
+                // Only process BUY messages
+                if (data.type === "BUY" && data.wallet && data.sol) {
+                    addBuyToUI(data.wallet, data.sol);
                 }
-                addBuyToUI(data.wallet, data.sol);
             } catch (error) {
                 console.error('Error parsing WebSocket message:', error);
             }
