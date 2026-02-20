@@ -8,7 +8,7 @@ const server = http.createServer(app);
 // Tracked token mint address
 const TRACKED_TOKEN_MINT = process.env.TRACKED_MINT || "HACLKPh6WQ79gP9NuufSs9VkDUjVsk5wCdbBCjTLpump";
 const WSOL_MINT = "So11111111111111111111111111111111111111112";
-const MIN_SOL_SPENT = 0.0005; // adjust if you want (0.001 etc)
+const MIN_SOL_SPENT = 0.001; // only show real swaps; ignore tiny transfers/fees
 
 const RAYDIUM_PROGRAMS = new Set([
     "RVKd61ztZW9ZkG6c8w5Qdct2GkM6RszsMMaE2s5kV1F", // example, adjust if needed
@@ -70,24 +70,45 @@ app.use(express.json());
 function parseBuyFromHeliusTx(tx) {
     if (tx?.transactionError != null) return null;
 
+    const sig = tx?.signature || tx?.transactionSignature || null;
+    if (rememberSig(sig)) return null; // dedupe: same tx can be sent multiple times by Helius
+
     const tokenTransfers = Array.isArray(tx?.tokenTransfers) ? tx.tokenTransfers : [];
     const nativeBalanceChanges = Array.isArray(tx?.nativeBalanceChanges)
         ? tx.nativeBalanceChanges
         : [];
 
-    // find tracked token receives
+    // Anyone who SENDS the tracked token in this tx is a seller — never count as buyer
+    const trackedTokenSenders = new Set(
+        tokenTransfers
+            .filter(
+                (t) =>
+                    t &&
+                    String(t.mint) === TRACKED_TOKEN_MINT &&
+                    t.fromUserAccount &&
+                    Number(t.tokenAmount) > 0
+            )
+            .map((t) => t.fromUserAccount)
+    );
+
+    // find tracked token receives (mint can be string; tokenAmount can be string or number)
+    // exclude recipients who also sent the token (seller / swap party)
     const receives = tokenTransfers.filter(
         (t) =>
             t &&
-            t.mint === TRACKED_TOKEN_MINT &&
+            String(t.mint) === TRACKED_TOKEN_MINT &&
             t.toUserAccount &&
+            !trackedTokenSenders.has(t.toUserAccount) &&
             Number(t.tokenAmount) > 0
     );
 
     if (receives.length === 0) return null;
 
-    // choose first buyer
-    const buyer = receives[0].toUserAccount;
+    // only accept single distinct buyer (avoids multi-party / complex txs being misread as one buy)
+    const buyers = [...new Set(receives.map((r) => r.toUserAccount))];
+    if (buyers.length !== 1) return null;
+
+    const buyer = buyers[0];
 
     let solSpent = 0;
 
@@ -105,7 +126,7 @@ function parseBuyFromHeliusTx(tx) {
         const wsolSpends = tokenTransfers.filter(
             (t) =>
                 t &&
-                t.mint === WSOL_MINT &&
+                String(t.mint) === WSOL_MINT &&
                 t.fromUserAccount === buyer &&
                 Number(t.tokenAmount) > 0
         );
@@ -118,7 +139,7 @@ function parseBuyFromHeliusTx(tx) {
         }
     }
 
-    if (!(solSpent > 0)) return null;
+    if (!(solSpent >= MIN_SOL_SPENT)) return null;
 
     return {
         type: "BUY",
@@ -159,14 +180,31 @@ app.get('/status', (req, res) => {
 app.post('/helius', (req, res) => {
     try {
         const webhook = req.body;
+        if (!webhook) {
+            state.counters.parseErrors++;
+            console.log('webhook ok: txCount=0 processed=0 buys=0 skipped=0 (empty body)');
+            return res.status(200).send('OK');
+        }
         
         // Increment webhook counter and update timestamp
         state.counters.webhooksReceived++;
         state.lastWebhookAt = new Date().toISOString();
-        state.lastWebhookSig = webhook.signature || webhook[0]?.signature || null;
         
-        // Handle both array and single object
-        const transactions = Array.isArray(webhook) ? webhook : [webhook];
+        // Normalize: Helius can send array of txs, single tx object, or wrapped { transactions: [...] }
+        let transactions = [];
+        if (Array.isArray(webhook)) {
+            transactions = webhook;
+        } else if (webhook.transactions && Array.isArray(webhook.transactions)) {
+            transactions = webhook.transactions;
+        } else if (webhook.signature || webhook.tokenTransfers || webhook.nativeBalanceChanges) {
+            transactions = [webhook];
+        } else if (webhook.data && Array.isArray(webhook.data)) {
+            transactions = webhook.data;
+        } else {
+            transactions = [webhook];
+        }
+        
+        state.lastWebhookSig = transactions[0]?.signature || transactions[0]?.transactionSignature || webhook.signature || null;
         
         let processed = 0;
         let buys = 0;

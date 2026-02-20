@@ -376,15 +376,6 @@ function updateWinnersScrollIndicator() {
     winnersList.style.setProperty('--fade-bottom', isScrollable && !isAtBottom ? '88%' : '100%');
 }
 
-function generateRandomWallet() {
-    const chars = '0123456789ABCDEF';
-    let wallet = '0x';
-    for (let i = 0; i < 40; i++) {
-        wallet += chars.charAt(Math.floor(Math.random() * chars.length));
-    }
-    return wallet.slice(-4);
-}
-
 function formatTimestamp(secondsAgo) {
     if (secondsAgo < 60) {
         return `${secondsAgo}s ago`;
@@ -529,26 +520,6 @@ function updateTimestamps() {
         return true; // Keep in array
     });
     updateLeadingBuyDisplay();
-}
-
-function generateRandomBuy() {
-    // Generate smaller amounts with more under 0.5 SOL
-    let amount;
-    const rand = Math.random();
-    if (rand < 0.85) {
-        // 85% chance of being under 0.5 SOL (0.1 to 0.49)
-        amount = (Math.random() * 0.39 + 0.1).toFixed(2);
-    } else if (rand < 0.95) {
-        // 10% chance of being 0.5 to 0.99 SOL
-        amount = (Math.random() * 0.49 + 0.5).toFixed(2);
-    } else {
-        // 5% chance of being 1 SOL or more
-        amount = (Math.random() * 4 + 1).toFixed(2);
-    }
-    const wallet = generateRandomWallet();
-    const timestamp = 0; // Just happened
-    
-    addBuy(amount, wallet, timestamp);
 }
 
 // Pause WebSocket tracking
@@ -767,6 +738,8 @@ function initBuysList() {
 
 // WebSocket connection for buy notifications
 let buyWebSocket = null;
+const seenBuySignatures = new Set();
+const MAX_SEEN_SIGNATURES = 500;
 
 function addBuyToUI(wallet, sol) {
     // Extract last 4 characters of wallet for display (uppercase, matching PumpFun format)
@@ -799,11 +772,20 @@ function connectBuyWebSocket() {
         buyWebSocket.onmessage = (event) => {
             try {
                 const data = JSON.parse(event.data);
-
-                // Only process BUY messages
-                if (data.type === "BUY" && data.wallet && data.sol) {
-                    addBuyToUI(data.wallet, data.sol);
+                if (data.type !== "BUY" || !data.wallet || !data.sol) return;
+                // Dedupe: same tx can arrive twice (e.g. reconnects or server retries)
+                const sig = data.signature;
+                if (sig && seenBuySignatures.has(sig)) return;
+                if (sig) {
+                    seenBuySignatures.add(sig);
+                    if (seenBuySignatures.size > MAX_SEEN_SIGNATURES) {
+                        const arr = [...seenBuySignatures];
+                        arr.splice(0, arr.length - MAX_SEEN_SIGNATURES);
+                        seenBuySignatures.clear();
+                        arr.forEach((s) => seenBuySignatures.add(s));
+                    }
                 }
+                addBuyToUI(data.wallet, data.sol);
             } catch (error) {
                 console.error('Error parsing WebSocket message:', error);
             }
