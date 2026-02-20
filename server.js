@@ -8,6 +8,7 @@ const MIN_SOL = 0.001;
 const recentBuys = [];
 
 app.use(express.json({ limit: "2mb" }));
+app.use(express.static(__dirname));
 
 app.get("/status", (req, res) => {
   res.json({ ok: true });
@@ -69,7 +70,6 @@ app.post("/helius", (req, res) => {
 });
 
 const PORT = 3000;
-
-app.listen(PORT, "0.0.0.0", () => {
-  console.log("Server listening on port", PORT);
+app.listen(PORT, () => {
+  console.log("Server listening on port 3000");
 });

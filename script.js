@@ -814,10 +814,7 @@ document.addEventListener('keydown', (e) => {
 
 async function loadBuys() {
   try {
-    const API_BASE = window.location.hostname === "localhost"
-      ? "http://localhost:3000"
-      : "";
-    const res = await fetch(`${API_BASE}/buys`);
+    const res = await fetch("/buys");
     const data = await res.json();
     renderBuys(data);
   } catch (e) {
