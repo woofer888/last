@@ -15,38 +15,10 @@ app.post("/helius", (req, res) => {
     const payload = req.body;
     const txs = Array.isArray(payload) ? payload : payload ? [payload] : [];
 
-    for (const tx of txs) {
-      if (tx?.transactionError) continue;
-      if (!tx?.events?.swap) continue;
-
-      const swap = tx.events.swap;
-
-      const outputs = Array.isArray(swap.tokenOutputs) ? swap.tokenOutputs : [];
-      const buyOutput = outputs.find(o => o.mint === TRACKED_TOKEN_MINT);
-      if (!buyOutput) continue;
-
-      let solSpent = 0;
-
-      if (swap.nativeInput && swap.nativeInput > 0) {
-        solSpent = swap.nativeInput;
-      } else {
-        const inputs = Array.isArray(swap.tokenInputs) ? swap.tokenInputs : [];
-        const wsolInput = inputs.find(i => i.mint === WSOL_MINT);
-        if (wsolInput) {
-          solSpent = Number(wsolInput.tokenAmount || 0);
-        }
-      }
-
-      if (solSpent <= 0) continue;
-
-      console.log(
-        "BUY:",
-        tx.signature,
-        "wallet:",
-        swap.userAccount,
-        "sol:",
-        solSpent
-      );
+    if (txs.length > 0) {
+      const tx = txs[0];
+      console.log("DEBUG SWAP STRUCTURE:");
+      console.log(JSON.stringify(tx, null, 2));
     }
 
     res.status(200).json({ ok: true });
