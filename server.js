@@ -28,7 +28,7 @@ wss.on('connection', (ws) => {
 app.use(express.json());
 
 // Tracked token mint address
-const TRACKED_TOKEN_MINT = process.env.TRACKED_MINT || "7K9NBMzAFvk5gfabciSJsZZRt2i7BB6oJdRSkyxsMMX8";
+const TRACKED_TOKEN_MINT = process.env.TRACKED_MINT || "HACLKPh6WQ79gP9NuufSs9VkDUjVsk5wCdbBCjTLpump";
 // WSOL mint address
 const WSOL_MINT = 'So11111111111111111111111111111111111111112';
 
