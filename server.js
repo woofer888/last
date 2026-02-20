@@ -32,57 +32,51 @@ const TRACKED_TOKEN_MINT = process.env.TRACKED_MINT || "HACLKPh6WQ79gP9NuufSs9Vk
 // WSOL mint address
 const WSOL_MINT = 'So11111111111111111111111111111111111111112';
 
-// Broadcast function
-function broadcast(data) {
-    const message = JSON.stringify(data);
-    clients.forEach((client) => {
-        if (client.readyState === WebSocket.OPEN) {
-            client.send(message);
-        }
-    });
-}
-
 app.post('/helius', (req, res) => {
     try {
         const webhook = req.body;
         
         // Process each transaction in the webhook
         if (webhook && Array.isArray(webhook)) {
-            webhook.forEach(transaction => {
-                let buyer = null;
-                let solSpent = 0;
+            webhook.forEach(tx => {
+                // Process SWAP transactions only
+                if (tx.type === "SWAP") {
+                    let buyer = null;
+                    let solSpent = 0;
 
-                if (transaction.type === "SWAP") {
-                    const nativeChanges = transaction.nativeBalanceChanges || [];
-                    const transfers = transaction.tokenTransfers || [];
+                    const transfers = tx.tokenTransfers || [];
 
-                    for (const change of nativeChanges) {
-                        if (change.nativeBalanceChange < 0) {
-                            const wallet = change.userAccount;
-                            const sol = Math.abs(change.nativeBalanceChange) / 1e9;
+                    for (const t of transfers) {
+                        // detect tracked token received
+                        if (t.mint === TRACKED_TOKEN_MINT && t.toUserAccount) {
+                            buyer = t.toUserAccount;
+                        }
 
-                            const received = transfers.find(t =>
-                                t.mint === TRACKED_TOKEN_MINT &&
-                                t.toUserAccount === wallet
-                            );
-
-                            if (received) {
-                                buyer = wallet;
-                                solSpent = sol;
-                                break;
+                        // detect WSOL spent
+                        if (t.mint === WSOL_MINT) {
+                            if (t.fromUserAccount) {
+                                solSpent = Number(t.tokenAmount);
                             }
                         }
                     }
-                }
 
-                if (buyer) {
-                    console.log("BUY DETECTED", buyer, solSpent);
+                    if (buyer && solSpent > 0) {
+                        console.log("BUY DETECTED", buyer, solSpent);
 
-                    broadcast({
-                        wallet: buyer,
-                        sol: solSpent,
-                        timestamp: Date.now()
-                    });
+                        // Broadcast to all connected WebSocket clients
+                        const buyData = {
+                            wallet: buyer,
+                            sol: solSpent,
+                            timestamp: Date.now()
+                        };
+
+                        const message = JSON.stringify(buyData);
+                        clients.forEach((client) => {
+                            if (client.readyState === WebSocket.OPEN) {
+                                client.send(message);
+                            }
+                        });
+                    }
                 }
             });
         }
@@ -98,5 +92,4 @@ server.listen(3000, () => {
     console.log('Server listening on port 3000');
     console.log('WebSocket server ready');
 });
-
 
