@@ -70,53 +70,37 @@ app.use(express.json());
 function parseBuyFromHeliusTx(tx) {
     if (tx?.transactionError != null) return null;
 
-    const signature = tx?.signature || tx?.transactionSignature || null;
-    if (rememberSig(signature)) return { skip: true, reason: "dupe_sig" };
-
-    const hasRaydiumProgram =
-        Array.isArray(tx?.accountData?.accountKeys) &&
-        tx.accountData.accountKeys.some((k) => RAYDIUM_PROGRAMS.has(k));
-
-    if (!hasRaydiumProgram) {
-        return { skip: true, reason: "not_dex_swap" };
-    }
-
     const tokenTransfers = Array.isArray(tx?.tokenTransfers) ? tx.tokenTransfers : [];
     const nativeBalanceChanges = Array.isArray(tx?.nativeBalanceChanges)
         ? tx.nativeBalanceChanges
         : [];
 
-    // 1) Find ALL receives of tracked mint to user accounts (positive)
-    const receives = tokenTransfers.filter((t) => {
-        if (!t) return false;
-        if (t.mint !== TRACKED_TOKEN_MINT) return false;
-        if (!t.toUserAccount) return false;
-        const amt = Number(t.tokenAmount);
-        return Number.isFinite(amt) && amt > 0;
-    });
+    // find tracked token receives
+    const receives = tokenTransfers.filter(
+        (t) =>
+            t &&
+            t.mint === TRACKED_TOKEN_MINT &&
+            t.toUserAccount &&
+            Number(t.tokenAmount) > 0
+    );
 
     if (receives.length === 0) return null;
 
-    // 2) Only accept if there is a single distinct buyer in this tx
-    const buyers = [...new Set(receives.map((r) => r.toUserAccount))];
-    if (buyers.length !== 1) return { skip: true, reason: "multi_buyer" };
+    // choose first buyer
+    const buyer = receives[0].toUserAccount;
 
-    const buyer = buyers[0];
     let solSpent = 0;
 
-    // 3) Native SOL spent by buyer
-    const buyerNativeEntry = nativeBalanceChanges.find(
+    // native SOL spent
+    const native = nativeBalanceChanges.find(
         (x) => x && x.userAccount === buyer
     );
 
-    if (buyerNativeEntry) {
-        const change = Number(buyerNativeEntry.nativeBalanceChange);
-        if (Number.isFinite(change) && change < 0) {
-            solSpent = (-change) / 1e9;
-        }
+    if (native && Number(native.nativeBalanceChange) < 0) {
+        solSpent = (-Number(native.nativeBalanceChange)) / 1e9;
     }
 
-    // 4) WSOL spent by buyer (Raydium / migrated)
+    // fallback WSOL spent
     if (solSpent <= 0) {
         const wsolSpends = tokenTransfers.filter(
             (t) =>
@@ -127,24 +111,21 @@ function parseBuyFromHeliusTx(tx) {
         );
 
         if (wsolSpends.length > 0) {
-            // sum them (sometimes split across routes)
-            solSpent = wsolSpends.reduce((sum, t) => sum + Number(t.tokenAmount), 0);
+            solSpent = wsolSpends.reduce(
+                (sum, t) => sum + Number(t.tokenAmount),
+                0
+            );
         }
     }
 
-    // 5) Final validation
-    if (!(solSpent > MIN_SOL_SPENT)) {
-        return { skip: true, reason: "sol_too_small_or_missing" };
-    }
-
-    const timestamp = tx?.timestamp || tx?.blockTime || Date.now();
+    if (!(solSpent > 0)) return null;
 
     return {
         type: "BUY",
         wallet: buyer,
         sol: solSpent,
-        signature,
-        timestamp,
+        signature: tx?.signature || tx?.transactionSignature || null,
+        timestamp: tx?.timestamp || tx?.blockTime || Date.now(),
     };
 }
 
@@ -201,13 +182,6 @@ app.post('/helius', (req, res) => {
             
             if (!result) {
                 // No buy detected (null returned)
-                skipped++;
-                continue;
-            }
-            
-            if (result.skip) {
-                // Buy detected but skipped (e.g., no_sol_spent)
-                state.counters.buysSkipped++;
                 skipped++;
                 continue;
             }
