@@ -10,6 +10,10 @@ const TRACKED_TOKEN_MINT = process.env.TRACKED_MINT || "HACLKPh6WQ79gP9NuufSs9Vk
 const WSOL_MINT = "So11111111111111111111111111111111111111112";
 const MIN_SOL_SPENT = 0.0005; // adjust if you want (0.001 etc)
 
+const RAYDIUM_PROGRAMS = new Set([
+    "RVKd61ztZW9ZkG6c8w5Qdct2GkM6RszsMMaE2s5kV1F", // example, adjust if needed
+]);
+
 // simple in-memory dedupe (last ~2000 sigs)
 const seenSigs = new Set();
 function rememberSig(sig) {
@@ -68,6 +72,14 @@ function parseBuyFromHeliusTx(tx) {
 
     const signature = tx?.signature || tx?.transactionSignature || null;
     if (rememberSig(signature)) return { skip: true, reason: "dupe_sig" };
+
+    const hasRaydiumProgram =
+        Array.isArray(tx?.accountData?.accountKeys) &&
+        tx.accountData.accountKeys.some((k) => RAYDIUM_PROGRAMS.has(k));
+
+    if (!hasRaydiumProgram) {
+        return { skip: true, reason: "not_dex_swap" };
+    }
 
     const tokenTransfers = Array.isArray(tx?.tokenTransfers) ? tx.tokenTransfers : [];
     const nativeBalanceChanges = Array.isArray(tx?.nativeBalanceChanges)
