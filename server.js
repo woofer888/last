@@ -2,6 +2,7 @@ const express = require("express");
 const app = express();
 
 const TRACKED_TOKEN_MINT = "HACLKPh6WQ79gP9NuufSs9VkDUjVsk5wCdbBCjTLpump";
+const WSOL_MINT = "So11111111111111111111111111111111111111112";
 const MIN_SOL = 0.001;
 
 app.use(express.json({ limit: "2mb" }));
@@ -16,14 +17,9 @@ app.post("/helius", (req, res) => {
     const txs = Array.isArray(payload) ? payload : payload ? [payload] : [];
 
     for (const tx of txs) {
-      if (tx === txs[0]) {
-        console.log("TRANSFERS:", JSON.stringify(tx.tokenTransfers, null, 2));
-        console.log("NATIVE:", JSON.stringify(tx.nativeBalanceChanges, null, 2));
-      }
       if (tx?.transactionError) continue;
 
       const transfers = Array.isArray(tx.tokenTransfers) ? tx.tokenTransfers : [];
-      const nativeChanges = Array.isArray(tx.nativeBalanceChanges) ? tx.nativeBalanceChanges : [];
 
       for (const transfer of transfers) {
         if (transfer.mint !== TRACKED_TOKEN_MINT) continue;
@@ -31,11 +27,14 @@ app.post("/helius", (req, res) => {
 
         const buyer = transfer.toUserAccount;
 
-        const native = nativeChanges.find(n => n.userAccount === buyer);
-        if (!native) continue;
-        if (native.nativeBalanceChange >= 0) continue;
+        const wsolOut = transfers.find(t =>
+          t.mint === WSOL_MINT &&
+          t.fromUserAccount === buyer
+        );
 
-        const solSpent = (-native.nativeBalanceChange) / 1e9;
+        if (!wsolOut) continue;
+
+        const solSpent = Number(wsolOut.tokenAmount || 0);
         if (solSpent < MIN_SOL) continue;
 
         console.log(
