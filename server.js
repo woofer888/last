@@ -70,22 +70,26 @@ app.post("/helius", (req, res) => {
 });
 
 function startHeliusWebSocket() {
-  const ws = new WebSocket(
-    `wss://mainnet.helius-rpc.com/?api-key=${process.env.HELIUS_API_KEY}`
-  );
+  try {
+    const ws = new WebSocket(
+      `wss://mainnet.helius-rpc.com/?api-key=${process.env.HELIUS_API_KEY}`
+    );
 
-  ws.on("open", () => {
+    ws.on("open", () => {
     console.log("Helius WebSocket connected");
-
-    ws.send(JSON.stringify({
-      jsonrpc: "2.0",
-      id: 1,
-      method: "logsSubscribe",
-      params: [
-        { mentions: ["HACLKPh6WQ79gP9NuufSs9VkDUjVsk5wCdbBCjTLpump"] },
-        { commitment: "processed" }
-      ]
-    }));
+    try {
+      ws.send(JSON.stringify({
+        jsonrpc: "2.0",
+        id: 1,
+        method: "logsSubscribe",
+        params: [
+          { mentions: ["HACLKPh6WQ79gP9NuufSs9VkDUjVsk5wCdbBCjTLpump"] },
+          { commitment: "processed" }
+        ]
+      }));
+    } catch (err) {
+      console.error("WS send on open:", err.message);
+    }
   });
 
   ws.on("error", (err) => {
@@ -94,7 +98,7 @@ function startHeliusWebSocket() {
 
   ws.on("message", async (msg) => {
     try {
-      const data = JSON.parse(msg.toString());
+      const data = JSON.parse(msg.toString() || "{}");
       const signature = data?.params?.result?.value?.signature;
       if (!signature) return;
 
@@ -150,9 +154,12 @@ function startHeliusWebSocket() {
     } catch (e) {}
   });
 
-  ws.on("close", () => {
-    setTimeout(startHeliusWebSocket, 3000);
-  });
+    ws.on("close", () => {
+      setTimeout(startHeliusWebSocket, 3000);
+    });
+  } catch (err) {
+    console.error("startHeliusWebSocket:", err.message);
+  }
 }
 
 const PORT = 3000;
