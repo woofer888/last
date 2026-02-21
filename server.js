@@ -2,6 +2,7 @@ const express = require("express");
 const WebSocket = require("ws");
 const app = express();
 
+// Helius WebSocket – use this URL
 const HELIUS_WS = "wss://mainnet.helius-rpc.com/?api-key=1fffa47b-183b-4542-a4de-97a5cc1929f5";
 const HELIUS_API_KEY = process.env.HELIUS_API_KEY || "1fffa47b-183b-4542-a4de-97a5cc1929f5";
 const TRACKED_TOKEN_MINT = "HACLKPh6WQ79gP9NuufSs9VkDUjVsk5wCdbBCjTLpump";
