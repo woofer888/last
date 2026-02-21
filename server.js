@@ -7,142 +7,40 @@ const app = express();
 
 const HELIUS_API_KEY = process.env.HELIUS_API_KEY;
 const HELIUS_WS = `wss://mainnet.helius-rpc.com/?api-key=${HELIUS_API_KEY}`;
-const HELIUS_RPC = `https://mainnet.helius-rpc.com/?api-key=${HELIUS_API_KEY}`;
 const TRACKED_TOKEN_MINT = "HACLKPh6WQ79gP9NuufSs9VkDUjVsk5wCdbBCjTLpump";
 const WSOL_MINT = "So11111111111111111111111111111111111111112";
 const MIN_SOL = 0.001;
-const POOL_VAULT_ACCOUNTS = new Set([]);
 
 let recentBuys = [];
-const sigQueue = [];
-const sigSeen = new Set();
-let processing = false;
 
-function enqueueSig(sig) {
-  if (!sig || sigSeen.has(sig)) return;
-  sigSeen.add(sig);
-  sigQueue.push(sig);
-}
-
-async function processQueue() {
-  if (processing) return;
-  if (!sigQueue.length) return;
-
-  processing = true;
-  const sig = sigQueue.shift();
-
-  try {
-    console.log("PROCESSING SIG:", sig);
-    await handleSignature(sig);
-  } catch (err) {
-    console.error("SIG PROCESS ERROR:", err.message);
-  } finally {
-    processing = false;
+function detectBuysFromTokenTransfers(transfers) {
+  const list = Array.isArray(transfers) ? transfers : [];
+  const deltaByWallet = Object.create(null);
+  for (const t of list) {
+    const amount = Number(t.tokenAmount ?? 0);
+    if (amount <= 0) continue;
+    const mint = t.mint;
+    const to = t.toUserAccount;
+    const from = t.fromUserAccount;
+    if (to) {
+      if (!deltaByWallet[to]) deltaByWallet[to] = Object.create(null);
+      deltaByWallet[to][mint] = (deltaByWallet[to][mint] || 0) + amount;
+    }
+    if (from) {
+      if (!deltaByWallet[from]) deltaByWallet[from] = Object.create(null);
+      deltaByWallet[from][mint] = (deltaByWallet[from][mint] || 0) - amount;
+    }
   }
-}
-
-setInterval(processQueue, 200);
-
-function parseBalanceAmount(uiTokenAmount) {
-  if (!uiTokenAmount) return 0;
-  const s = uiTokenAmount.uiAmountString ?? String(uiTokenAmount.uiAmount ?? 0);
-  const n = parseFloat(s, 10);
-  return Number.isFinite(n) ? n : 0;
-}
-
-function detectBuysFromPrePost(pre, post) {
-  const preByOwner = Object.create(null);
-  const postByOwner = Object.create(null);
-  for (const e of pre) {
-    if (!e.owner || !e.mint) continue;
-    if (!preByOwner[e.owner]) preByOwner[e.owner] = Object.create(null);
-    preByOwner[e.owner][e.mint] = (preByOwner[e.owner][e.mint] || 0) + parseBalanceAmount(e.uiTokenAmount);
-  }
-  for (const e of post) {
-    if (!e.owner || !e.mint) continue;
-    if (!postByOwner[e.owner]) postByOwner[e.owner] = Object.create(null);
-    postByOwner[e.owner][e.mint] = (postByOwner[e.owner][e.mint] || 0) + parseBalanceAmount(e.uiTokenAmount);
-  }
-  const owners = new Set([...Object.keys(preByOwner), ...Object.keys(postByOwner)]);
   const buyers = [];
-  for (const owner of owners) {
-    if (POOL_VAULT_ACCOUNTS.has(owner)) continue;
-    const preTracked = (preByOwner[owner] && preByOwner[owner][TRACKED_TOKEN_MINT]) || 0;
-    const postTracked = (postByOwner[owner] && postByOwner[owner][TRACKED_TOKEN_MINT]) || 0;
-    const preWSOL = (preByOwner[owner] && preByOwner[owner][WSOL_MINT]) || 0;
-    const postWSOL = (postByOwner[owner] && postByOwner[owner][WSOL_MINT]) || 0;
-    const deltaTracked = postTracked - preTracked;
-    const deltaWSOL = postWSOL - preWSOL;
+  for (const wallet of Object.keys(deltaByWallet)) {
+    const deltaTracked = deltaByWallet[wallet][TRACKED_TOKEN_MINT] || 0;
+    const deltaWSOL = deltaByWallet[wallet][WSOL_MINT] || 0;
     if (deltaTracked > 0 && deltaWSOL < 0) {
       const solSpent = Math.abs(deltaWSOL);
-      if (solSpent >= MIN_SOL) buyers.push({ wallet: owner, solSpent });
+      if (solSpent >= MIN_SOL) buyers.push({ wallet, solSpent });
     }
   }
   return buyers;
-}
-
-async function handleSignature(sig) {
-  console.log("HANDLE SIGNATURE CALLED:", sig);
-  const fetchTx = async () => {
-    const response = await fetch(HELIUS_RPC, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        jsonrpc: "2.0",
-        id: 1,
-        method: "getTransaction",
-        params: [
-          sig,
-          {
-            encoding: "jsonParsed",
-            commitment: "processed",
-            maxSupportedTransactionVersion: 0
-          }
-        ]
-      })
-    });
-    if (response.status === 429) return null;
-    let json;
-    try {
-      json = await response.json();
-    } catch (err) {
-      return null;
-    }
-    if (JSON.stringify(json).includes("429")) return null;
-    return json;
-  };
-  let json;
-  try {
-    json = await fetchTx();
-  } catch (err) {
-    return;
-  }
-  if (json?.result == null) {
-    await new Promise((r) => setTimeout(r, 300));
-    try {
-      json = await fetchTx();
-    } catch (err) {
-      return;
-    }
-    if (json?.result == null) return;
-  }
-  const tx = json?.result;
-  const meta = tx?.meta;
-  console.log("TX META:", meta ? "exists" : "missing");
-  if (meta) {
-    console.log("PRE BALANCES LENGTH:", meta.preTokenBalances?.length || 0);
-    console.log("POST BALANCES LENGTH:", meta.postTokenBalances?.length || 0);
-  }
-  console.log("Checking buy logic for signature:", sig);
-  const pre = Array.isArray(meta?.preTokenBalances) ? meta.preTokenBalances : [];
-  const post = Array.isArray(meta?.postTokenBalances) ? meta.postTokenBalances : [];
-  const buyers = detectBuysFromPrePost(pre, post);
-  if (buyers.length === 0) console.log("NOT A BUY:", sig);
-  for (const { wallet, solSpent } of buyers) {
-    recentBuys.unshift({ wallet, sol: solSpent, time: Date.now() });
-    if (recentBuys.length > 50) recentBuys.pop();
-    console.log("WS BUY:", wallet, solSpent);
-  }
 }
 
 function detectBuyFromTx(tx) {
@@ -204,13 +102,40 @@ function startHeliusWebSocket() {
       } catch (err) {}
     });
     ws.on("error", () => {});
-    ws.on("message", (msg) => {
+    ws.on("message", async (msg) => {
       try {
         const data = JSON.parse(msg.toString() || "{}");
         const signature = data?.params?.result?.value?.signature;
         if (!signature) return;
+
         console.log("WS SIG:", signature);
-        enqueueSig(signature);
+
+        const response = await fetch(
+          `https://api.helius.xyz/v0/transactions/?api-key=${process.env.HELIUS_API_KEY}`,
+          {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ transactions: [signature] })
+          }
+        );
+
+        if (response.status === 429) {
+          console.log("Enhanced API rate limited");
+          return;
+        }
+
+        const txs = await response.json();
+        if (!txs || !txs[0]) return;
+
+        const tx = Array.isArray(txs) ? txs[0] : txs;
+        const transfers = tx?.tokenTransfers || [];
+        const buyers = detectBuysFromTokenTransfers(transfers);
+
+        for (const { wallet, solSpent } of buyers) {
+          recentBuys.unshift({ wallet, sol: solSpent, time: Date.now() });
+          if (recentBuys.length > 50) recentBuys.pop();
+          console.log("WS BUY:", wallet, solSpent);
+        }
       } catch (e) {}
     });
     ws.on("close", () => setTimeout(startHeliusWebSocket, 3000));
