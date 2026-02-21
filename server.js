@@ -85,13 +85,14 @@ async function getTransactionMeta(signature) {
       params: [signature, { encoding: "jsonParsed", maxSupportedTransactionVersion: 0 }]
     })
   });
-  if (!res.ok) return { pre: [], post: [] };
+  if (!res.ok) return { pre: [], post: [], meta: null };
   const json = await res.json();
   const tx = json?.result;
-  const meta = tx?.meta;
+  const meta = tx?.meta ?? null;
   return {
     pre: Array.isArray(meta?.preTokenBalances) ? meta.preTokenBalances : [],
-    post: Array.isArray(meta?.postTokenBalances) ? meta.postTokenBalances : []
+    post: Array.isArray(meta?.postTokenBalances) ? meta.postTokenBalances : [],
+    meta
   };
 }
 
@@ -137,6 +138,8 @@ app.post("/helius", async (req, res) => {
   }
 });
 
+let wsFirstTxLogged = false;
+
 function startHeliusWebSocket() {
   const ws = new WebSocket(HELIUS_WS);
 
@@ -163,7 +166,14 @@ function startHeliusWebSocket() {
       const logInfo = data.params.result;
       const signature = logInfo.value.signature;
 
-      const { pre, post } = await getTransactionMeta(signature);
+      const { pre, post, meta } = await getTransactionMeta(signature);
+      if (!wsFirstTxLogged) {
+        wsFirstTxLogged = true;
+        console.log("SIGNATURE:", signature);
+        console.log("PRE BALANCES:", JSON.stringify(pre, null, 2));
+        console.log("POST BALANCES:", JSON.stringify(post, null, 2));
+        console.log("NATIVE PRE/POST:", meta?.preBalances, meta?.postBalances);
+      }
       const buyers = detectBuysFromPrePostBalances(pre, post);
 
       for (const { wallet: buyer, solSpent } of buyers) {
