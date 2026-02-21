@@ -71,9 +71,11 @@ function detectBuysFromPrePostBalances(preTokenBalances, postTokenBalances) {
   return buyers;
 }
 
-/** Get preTokenBalances and postTokenBalances from raw getTransaction (when enhanced API doesn't include them). */
-async function fetchPrePostBalances(signature) {
-  const res = await fetch(`https://mainnet.helius-rpc.com/?api-key=${HELIUS_API_KEY}`, {
+const RPC_URL = `https://mainnet.helius-rpc.com/?api-key=${HELIUS_API_KEY}`;
+
+/** Fetch transaction via standard RPC getTransaction; return tx.meta.preTokenBalances and postTokenBalances. */
+async function getTransactionMeta(signature) {
+  const res = await fetch(RPC_URL, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
@@ -85,18 +87,12 @@ async function fetchPrePostBalances(signature) {
   });
   if (!res.ok) return { pre: [], post: [] };
   const json = await res.json();
-  const meta = json?.result?.meta;
+  const tx = json?.result;
+  const meta = tx?.meta;
   return {
     pre: Array.isArray(meta?.preTokenBalances) ? meta.preTokenBalances : [],
     post: Array.isArray(meta?.postTokenBalances) ? meta.postTokenBalances : []
   };
-}
-
-function getPrePostFromTx(tx) {
-  const meta = tx?.meta;
-  const pre = (meta && meta.preTokenBalances) || tx.preTokenBalances || [];
-  const post = (meta && meta.postTokenBalances) || tx.postTokenBalances || [];
-  return { pre: Array.isArray(pre) ? pre : [], post: Array.isArray(post) ? post : [] };
 }
 
 app.use(express.json({ limit: "2mb" }));
@@ -114,20 +110,16 @@ app.post("/helius", async (req, res) => {
   try {
     const payload = req.body;
     const txs = Array.isArray(payload) ? payload : payload ? [payload] : [];
+    const signatures = txs
+      .filter((tx) => !tx?.transactionError && tx?.signature)
+      .map((tx) => tx.signature);
 
-    for (const tx of txs) {
-      if (tx?.transactionError) continue;
-
-      let { pre, post } = getPrePostFromTx(tx);
-      if (pre.length === 0 && post.length === 0 && tx.signature) {
-        const fetched = await fetchPrePostBalances(tx.signature);
-        pre = fetched.pre;
-        post = fetched.post;
-      }
+    for (const sig of signatures) {
+      const { pre, post } = await getTransactionMeta(sig);
       const buyers = detectBuysFromPrePostBalances(pre, post);
 
       for (const { wallet: buyer, solSpent } of buyers) {
-        console.log("BUY:", tx.signature, "wallet:", buyer, "sol:", solSpent.toFixed(4));
+        console.log("BUY:", sig, "wallet:", buyer, "sol:", solSpent.toFixed(4));
 
         recentBuys.unshift({
           wallet: buyer,
@@ -171,41 +163,18 @@ function startHeliusWebSocket() {
       const logInfo = data.params.result;
       const signature = logInfo.value.signature;
 
-      // Always fetch full parsed transaction for final BUY detection (do not rely on logsSubscribe alone)
-      const res = await fetch(
-        `https://api.helius.xyz/v0/transactions/?api-key=${HELIUS_API_KEY}`,
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ transactions: [signature] })
-        }
-      );
-      if (!res.ok) return;
-      const txs = await res.json();
-      const list = Array.isArray(txs) ? txs : txs ? [txs] : [];
+      const { pre, post } = await getTransactionMeta(signature);
+      const buyers = detectBuysFromPrePostBalances(pre, post);
 
-      for (const tx of list) {
-        if (tx?.transactionError) continue;
+      for (const { wallet: buyer, solSpent } of buyers) {
+        console.log("WS BUY:", buyer, solSpent);
 
-        const sig = tx?.signature ?? signature;
-        let { pre, post } = getPrePostFromTx(tx);
-        if (pre.length === 0 && post.length === 0 && sig) {
-          const fetched = await fetchPrePostBalances(sig);
-          pre = fetched.pre;
-          post = fetched.post;
-        }
-        const buyers = detectBuysFromPrePostBalances(pre, post);
-
-        for (const { wallet: buyer, solSpent } of buyers) {
-          console.log("WS BUY:", buyer, solSpent);
-
-          recentBuys.unshift({
-            wallet: buyer,
-            sol: solSpent,
-            time: Date.now()
-          });
-          if (recentBuys.length > 50) recentBuys.pop();
-        }
+        recentBuys.unshift({
+          wallet: buyer,
+          sol: solSpent,
+          time: Date.now()
+        });
+        if (recentBuys.length > 50) recentBuys.pop();
       }
     } catch (e) {
       console.log("WS error parse:", e.message);
