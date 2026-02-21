@@ -71,7 +71,7 @@ function startHeliusWebSocket() {
       id: 1,
       method: "logsSubscribe",
       params: [
-        "all",
+        { mentions: ["TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"] },
         { commitment: "processed" }
       ]
     }));
@@ -82,8 +82,6 @@ function startHeliusWebSocket() {
       const data = JSON.parse(msg.toString());
       const signature = data?.params?.result?.value?.signature;
       if (!signature) return;
-
-      console.log("WS SIG:", signature);
 
       const res = await fetch(
         `https://api.helius.xyz/v0/transactions/?api-key=${HELIUS_API_KEY}`,
