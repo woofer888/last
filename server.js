@@ -113,10 +113,18 @@ async function handleSignature(sig) {
     await new Promise((r) => setTimeout(r, 1000));
     return;
   }
-  const meta = json?.result?.meta;
+  const tx = json?.result;
+  const meta = tx?.meta;
+  console.log("TX META:", meta ? "exists" : "missing");
+  if (meta) {
+    console.log("PRE BALANCES LENGTH:", meta.preTokenBalances?.length || 0);
+    console.log("POST BALANCES LENGTH:", meta.postTokenBalances?.length || 0);
+  }
+  console.log("Checking buy logic for signature:", sig);
   const pre = Array.isArray(meta?.preTokenBalances) ? meta.preTokenBalances : [];
   const post = Array.isArray(meta?.postTokenBalances) ? meta.postTokenBalances : [];
   const buyers = detectBuysFromPrePost(pre, post);
+  if (buyers.length === 0) console.log("NOT A BUY:", sig);
   for (const { wallet, solSpent } of buyers) {
     recentBuys.unshift({ wallet, sol: solSpent, time: Date.now() });
     if (recentBuys.length > 50) recentBuys.pop();
