@@ -87,7 +87,7 @@ async function getTransactionMeta(signature) {
           {
             encoding: "jsonParsed",
             maxSupportedTransactionVersion: 0,
-            commitment: "confirmed"
+            commitment: "processed"
           }
         ]
       })
