@@ -1,3 +1,6 @@
+// Minimum SOL amount to qualify for leading buy / timer / winner (buys below still shown, greyed out)
+const MIN_ELIGIBLE_BUY_SOL = 0.5;
+
 // Timer state
 let timeLeft = 10;
 let timerInterval = null;
@@ -157,9 +160,9 @@ function showWinner(roundStartTimeForWinner = roundStartTime) {
     // Get the current jackpot amount as the winning amount
     const jackpotAmount = parseFloat(document.getElementById('jackpotAmount').textContent);
     
-    // Find the leading buy (the one that would win - must be >= 0.2 SOL from the round that just ended)
+    // Find the leading buy (the one that would win - must be >= MIN_ELIGIBLE_BUY_SOL from the round that just ended)
     // This must match the same logic as updateLeadingBuyDisplay() - the LARGEST qualifying buy
-    const qualifyingBuys = buyItems.filter((b) => b.amount >= 0.2 && b.createdAt >= roundStartTimeForWinner);
+    const qualifyingBuys = buyItems.filter((b) => b.amount >= MIN_ELIGIBLE_BUY_SOL && b.createdAt >= roundStartTimeForWinner);
     const leading = qualifyingBuys.length > 0 
         ? qualifyingBuys.sort((a, b) => {
             // Sort by amount descending (largest first), then by createdAt descending (latest/newest first if same amount)
@@ -183,7 +186,7 @@ function showWinner(roundStartTimeForWinner = roundStartTime) {
         winnerTxHash = leading.txHash || null;
         console.log('✅ Using leading buy wallet:', winnerWallet, 'txHash:', winnerTxHash);
     } else {
-        // Fallback: find the largest buy from the round (even if < 0.2 SOL)
+        // Fallback: find the largest buy from the round (even if < MIN_ELIGIBLE_BUY_SOL)
         const allRoundBuys = buyItems.filter((b) => b.createdAt >= roundStartTimeForWinner);
         const largestBuy = allRoundBuys.length > 0
             ? allRoundBuys.sort((a, b) => b.amount - a.amount)[0]
@@ -195,7 +198,7 @@ function showWinner(roundStartTimeForWinner = roundStartTime) {
         } else {
             // Last resort: use the most recent qualifying buy (any amount, any time)
             const mostRecentQualifying = buyItems
-                .filter((b) => b.amount >= 0.2)
+                .filter((b) => b.amount >= MIN_ELIGIBLE_BUY_SOL)
                 .sort((a, b) => b.createdAt - a.createdAt)[0];
             if (mostRecentQualifying && mostRecentQualifying.wallet) {
                 winnerWallet = mostRecentQualifying.wallet;
@@ -256,7 +259,7 @@ function showWinner(roundStartTimeForWinner = roundStartTime) {
     }, 7000);
     
     // Hide overlay after fade out completes (1.5s fade + buffer)
-        // Timer will wait for first buy of 0.2 SOL or more to restart
+        // Timer will wait for first buy of MIN_ELIGIBLE_BUY_SOL or more to restart
     setTimeout(() => {
         winnerOverlay.classList.remove('show', 'fade-out');
         newRoundText.textContent = '';
@@ -279,7 +282,7 @@ function showWinner(roundStartTimeForWinner = roundStartTime) {
         timerDisplay.style.animation = 'timerPulse 1s ease-in-out infinite';
         timerDisplay.style.color = '#14f195';
         leadingBuySection?.classList.remove('visible');
-        // Timer will start when first buy of 0.2 SOL or more happens
+        // Timer will start when first buy of MIN_ELIGIBLE_BUY_SOL or more happens
     }, 8500);
 }
 
@@ -392,8 +395,8 @@ function createBuyItem(amount, wallet, timestamp) {
     const buyItem = document.createElement('div');
     const buyAmountValue = parseFloat(amount);
     
-    // Add greyed-out class for buys under 0.2 SOL
-    if (buyAmountValue < 0.2) {
+    // Add greyed-out class for buys under minimum eligible
+    if (buyAmountValue < MIN_ELIGIBLE_BUY_SOL) {
         buyItem.className = 'buy-item buy-item-greyed';
     } else {
         buyItem.className = 'buy-item';
@@ -429,8 +432,8 @@ function updateLeadingBuyDisplay() {
     // Only show when timer is 9 or less (countdown has started)
     const shouldShow = timeLeft <= 9 && !winnerOverlay.classList.contains('show');
     // Leading buy must be from current round (added after roundStartTime)
-    // Find the LARGEST qualifying buy (>= 0.2 SOL) from current round
-    const qualifyingBuys = buyItems.filter((b) => b.amount >= 0.2 && b.createdAt >= roundStartTime);
+    // Find the LARGEST qualifying buy (>= MIN_ELIGIBLE_BUY_SOL) from current round
+    const qualifyingBuys = buyItems.filter((b) => b.amount >= MIN_ELIGIBLE_BUY_SOL && b.createdAt >= roundStartTime);
     const leading = qualifyingBuys.length > 0
         ? qualifyingBuys.sort((a, b) => {
             // Sort by amount descending (largest first), then by createdAt descending (latest/newest first if same amount)
@@ -485,8 +488,8 @@ function addBuy(amount, wallet, timestamp, txHash = null, fullWallet = null) {
     // Update leading buy display when timer <= 9
     updateLeadingBuyDisplay();
     
-    // Restart timer if buy is 0.2 SOL or bigger (but not during winner display)
-    if (parseFloat(amount) >= 0.2 && !winnerOverlay.classList.contains('show')) {
+    // Restart timer if buy is minimum eligible or bigger (but not during winner display)
+    if (parseFloat(amount) >= MIN_ELIGIBLE_BUY_SOL && !winnerOverlay.classList.contains('show')) {
         // Clear any existing interval
         if (timerInterval) {
             clearInterval(timerInterval);
@@ -741,7 +744,7 @@ function initBuysList() {
 
 // Initialize
 createParticles();
-// Timer will start when first buy of 0.2 SOL or more happens
+// Timer will start when first buy of MIN_ELIGIBLE_BUY_SOL or more happens
 initBuysList();
 
 // Cleanup WebSockets on page unload
@@ -856,7 +859,7 @@ function renderBuys(data) {
     container.removeChild(container.lastChild);
   }
 
-  if (buyItems[0] && buyItems[0].amount >= 0.2 && !timerInterval && !winnerOverlay.classList.contains("show")) {
+  if (buyItems[0] && buyItems[0].amount >= MIN_ELIGIBLE_BUY_SOL && !timerInterval && !winnerOverlay.classList.contains("show")) {
     roundStartTime = buyItems[0].createdAt;
     startTimer();
   }

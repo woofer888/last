@@ -3,6 +3,7 @@ const WebSocket = require("ws");
 const app = express();
 
 const HELIUS_WS = "wss://mainnet.helius-rpc.com/?api-key=1fffa47b-183b-4542-a4de-97a5cc1929f5";
+const HELIUS_API_KEY = "1fffa47b-183b-4542-a4de-97a5cc1929f5";
 const TRACKED_TOKEN_MINT = "HACLKPh6WQ79gP9NuufSs9VkDUjVsk5wCdbBCjTLpump";
 const WSOL_MINT = "So11111111111111111111111111111111111111112";
 const MIN_SOL = 0.001;
@@ -88,7 +89,7 @@ function startHeliusWebSocket() {
     }));
   });
 
-  ws.on("message", (msg) => {
+  ws.on("message", async (msg) => {
     try {
       const data = JSON.parse(msg.toString());
 
@@ -99,8 +100,47 @@ function startHeliusWebSocket() {
 
       console.log("WS TX:", signature);
 
-      // OPTIONAL: later we can fetch parsed transaction here
-      // For now just log real-time detection
+      const res = await fetch(
+        `https://api.helius.xyz/v0/transactions?api-key=${HELIUS_API_KEY}`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ transactions: [signature] })
+        }
+      );
+      if (!res.ok) return;
+      const txs = await res.json();
+      const list = Array.isArray(txs) ? txs : txs ? [txs] : [];
+
+      for (const tx of list) {
+        if (tx?.transactionError) continue;
+
+        const transfers = Array.isArray(tx.tokenTransfers) ? tx.tokenTransfers : [];
+
+        for (const transfer of transfers) {
+          if (transfer.mint !== TRACKED_TOKEN_MINT) continue;
+          if (!transfer.toUserAccount) continue;
+
+          const buyer = transfer.toUserAccount;
+
+          const wsolOut = transfers.find(t =>
+            t.mint === WSOL_MINT && t.fromUserAccount === buyer
+          );
+          if (!wsolOut) continue;
+
+          const solSpent = Number(wsolOut.tokenAmount || 0);
+          if (solSpent < MIN_SOL) continue;
+
+          console.log("WS BUY:", signature, "wallet:", buyer, "sol:", solSpent.toFixed(4));
+
+          recentBuys.unshift({
+            wallet: buyer,
+            sol: solSpent,
+            time: Date.now()
+          });
+          if (recentBuys.length > 50) recentBuys.pop();
+        }
+      }
     } catch (e) {
       console.log("WS error parse:", e.message);
     }
