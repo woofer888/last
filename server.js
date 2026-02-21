@@ -83,35 +83,48 @@ function detectBuysFromPrePost(pre, post) {
 
 async function handleSignature(sig) {
   console.log("HANDLE SIGNATURE CALLED:", sig);
-  let res;
-  try {
-    res = await fetch(HELIUS_RPC, {
+  const fetchTx = async () => {
+    const response = await fetch(HELIUS_RPC, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         jsonrpc: "2.0",
         id: 1,
         method: "getTransaction",
-        params: [sig, { encoding: "jsonParsed", maxSupportedTransactionVersion: 0 }]
+        params: [
+          sig,
+          {
+            encoding: "jsonParsed",
+            commitment: "processed",
+            maxSupportedTransactionVersion: 0
+          }
+        ]
       })
     });
-  } catch (err) {
-    return;
-  }
-  if (res.status === 429) {
-    await new Promise((r) => setTimeout(r, 1000));
-    return;
-  }
+    if (response.status === 429) return null;
+    let json;
+    try {
+      json = await response.json();
+    } catch (err) {
+      return null;
+    }
+    if (JSON.stringify(json).includes("429")) return null;
+    return json;
+  };
   let json;
   try {
-    json = await res.json();
+    json = await fetchTx();
   } catch (err) {
     return;
   }
-  const text = JSON.stringify(json);
-  if (text.includes("429")) {
-    await new Promise((r) => setTimeout(r, 1000));
-    return;
+  if (json?.result == null) {
+    await new Promise((r) => setTimeout(r, 300));
+    try {
+      json = await fetchTx();
+    } catch (err) {
+      return;
+    }
+    if (json?.result == null) return;
   }
   const tx = json?.result;
   const meta = tx?.meta;
