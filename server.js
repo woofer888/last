@@ -156,7 +156,11 @@ function startHeliusWebSocket() {
 }
 
 const PORT = 3000;
+let wsStartedOnce = false;
+
 app.listen(PORT, () => {
+  if (wsStartedOnce) return;
+  wsStartedOnce = true;
   console.log("Server listening on port 3000");
   try {
     startHeliusWebSocket();
