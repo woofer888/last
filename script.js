@@ -488,8 +488,8 @@ function addBuy(amount, wallet, timestamp, txHash = null, fullWallet = null) {
     // Update leading buy display when timer <= 9
     updateLeadingBuyDisplay();
     
-    // Restart timer if buy is minimum eligible or bigger (but not during winner display)
-    if (parseFloat(amount) >= MIN_ELIGIBLE_BUY_SOL && !winnerOverlay.classList.contains('show')) {
+    // Restart timer only for new eligible buy in current round (not during winner display)
+    if (parseFloat(amount) >= MIN_ELIGIBLE_BUY_SOL && !winnerOverlay.classList.contains('show') && buyData.createdAt >= roundStartTime) {
         // Clear any existing interval
         if (timerInterval) {
             clearInterval(timerInterval);
@@ -859,7 +859,8 @@ function renderBuys(data) {
     container.removeChild(container.lastChild);
   }
 
-  if (buyItems[0] && buyItems[0].amount >= MIN_ELIGIBLE_BUY_SOL && !timerInterval && !winnerOverlay.classList.contains("show")) {
+  // Only start timer when there is an eligible buy from the current round (after roundStartTime)
+  if (buyItems[0] && buyItems[0].amount >= MIN_ELIGIBLE_BUY_SOL && buyItems[0].createdAt >= roundStartTime && !timerInterval && !winnerOverlay.classList.contains("show")) {
     roundStartTime = buyItems[0].createdAt;
     startTimer();
   }
