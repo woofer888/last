@@ -159,12 +159,9 @@ setInterval(async () => {
 }, 150);
 
 function startHeliusWebSocket() {
-  console.log("HELIUS_API_KEY:", process.env.HELIUS_API_KEY);
   try {
-    console.log("Connecting to:", HELIUS_WS);
     const ws = new WebSocket(HELIUS_WS);
     ws.on("open", () => {
-      console.log("WS OPEN EVENT FIRED");
       console.log("Helius WebSocket connected");
       try {
         ws.send(
@@ -172,10 +169,12 @@ function startHeliusWebSocket() {
             jsonrpc: "2.0",
             id: 1,
             method: "logsSubscribe",
-            params: [{ mentions: [TRACKED_TOKEN_MINT] }, { commitment: "processed" }]
+            params: [
+              { mentions: ["HACLKPh6WQ79gP9NuufSs9VkDUjVsk5wCdbBCjTLpump"] },
+              { commitment: "processed" }
+            ]
           })
         );
-        console.log("Subscription message sent");
       } catch (err) {}
     });
     ws.on("error", () => {});
@@ -184,6 +183,7 @@ function startHeliusWebSocket() {
         const data = JSON.parse(msg.toString() || "{}");
         const signature = data?.params?.result?.value?.signature;
         if (!signature) return;
+        console.log("WS SIG:", signature);
         enqueueSig(signature);
       } catch (e) {}
     });
