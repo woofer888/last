@@ -1,6 +1,8 @@
 const express = require("express");
+const WebSocket = require("ws");
 const app = express();
 
+const HELIUS_WS = "wss://mainnet.helius-rpc.com/?api-key=1fffa47b-183b-4542-a4de-97a5cc1929f5";
 const TRACKED_TOKEN_MINT = "HACLKPh6WQ79gP9NuufSs9VkDUjVsk5wCdbBCjTLpump";
 const WSOL_MINT = "So11111111111111111111111111111111111111112";
 const MIN_SOL = 0.001;
@@ -69,7 +71,53 @@ app.post("/helius", (req, res) => {
   }
 });
 
+function startHeliusWebSocket() {
+  const ws = new WebSocket(HELIUS_WS);
+
+  ws.on("open", () => {
+    console.log("Helius WebSocket connected");
+
+    ws.send(JSON.stringify({
+      jsonrpc: "2.0",
+      id: 1,
+      method: "logsSubscribe",
+      params: [
+        { mentions: [TRACKED_TOKEN_MINT] },
+        { commitment: "processed" }
+      ]
+    }));
+  });
+
+  ws.on("message", (msg) => {
+    try {
+      const data = JSON.parse(msg.toString());
+
+      if (!data.params) return;
+
+      const logInfo = data.params.result;
+      const signature = logInfo.value.signature;
+
+      console.log("WS TX:", signature);
+
+      // OPTIONAL: later we can fetch parsed transaction here
+      // For now just log real-time detection
+    } catch (e) {
+      console.log("WS error parse:", e.message);
+    }
+  });
+
+  ws.on("close", () => {
+    console.log("Helius WS closed. Reconnecting...");
+    setTimeout(startHeliusWebSocket, 3000);
+  });
+
+  ws.on("error", (err) => {
+    console.log("Helius WS error:", err.message);
+  });
+}
+
 const PORT = 3000;
 app.listen(PORT, () => {
   console.log("Server listening on port 3000");
+  startHeliusWebSocket();
 });
