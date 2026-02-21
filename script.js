@@ -853,9 +853,11 @@ function renderBuys(data) {
 
 setInterval(() => {
   fetch("/buys")
-    .then(r => r.json())
-    .then(renderBuys);
+    .then((r) => r.json())
+    .then(renderBuys)
+    .catch(() => {});
 }, 1000);
 fetch("/buys")
-  .then(r => r.json())
-  .then(renderBuys);
+  .then((r) => r.json())
+  .then(renderBuys)
+  .catch(() => {});
