@@ -309,7 +309,7 @@ const maxVisibleBuys = 15;
 
 // Winners functionality
 let winnerItems = [];
-const maxVisibleWinners = 15;
+const maxWinnersInList = 50; /* keep up to 50 in DOM so list can scroll when 15+ */
 
 // Generate random transaction hash for solscan link
 function generateTxHash() {
@@ -355,7 +355,7 @@ function addWinner(amount, wallet, txHash = null) {
     const winnerData = { element: winnerItem, createdAt: Date.now() };
     winnerItems.unshift(winnerData);
 
-    if (winnerItems.length > maxVisibleWinners) {
+    if (winnerItems.length > maxWinnersInList) {
         const old = winnerItems.pop();
         if (old && old.element && old.element.parentNode) old.element.remove();
     }
@@ -801,6 +801,7 @@ if (infoModalContent) {
 }
 
 window.addEventListener('resize', () => {
+    updateWinnersScrollIndicator();
     if (infoModalOverlay?.classList.contains('show')) {
         updateInfoModalScrollIndicator();
     }
@@ -856,7 +857,7 @@ setInterval(() => {
     .then((r) => r.json())
     .then(renderBuys)
     .catch(() => {});
-}, 1000);
+}, 300);
 fetch("/buys")
   .then((r) => r.json())
   .then(renderBuys)
