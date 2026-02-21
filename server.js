@@ -11,7 +11,6 @@ const WebSocket = require("ws");
 const app = express();
 
 const HELIUS_API_KEY = process.env.HELIUS_API_KEY;
-const HELIUS_WS = `wss://mainnet.helius-rpc.com/?api-key=${HELIUS_API_KEY}`;
 const TRACKED_TOKEN_MINT = "HACLKPh6WQ79gP9NuufSs9VkDUjVsk5wCdbBCjTLpump";
 const WSOL_MINT = "So11111111111111111111111111111111111111112";
 
@@ -71,23 +70,26 @@ app.post("/helius", (req, res) => {
 });
 
 function startHeliusWebSocket() {
-  const ws = new WebSocket(HELIUS_WS);
+  const ws = new WebSocket(
+    `wss://mainnet.helius-rpc.com/?api-key=${process.env.HELIUS_API_KEY}`
+  );
 
   ws.on("open", () => {
+    console.log("Helius WebSocket connected");
+
     ws.send(JSON.stringify({
       jsonrpc: "2.0",
       id: 1,
       method: "logsSubscribe",
       params: [
-        {
-          mentions: [
-            "JUP6LkbZbjS1jKKwapdHNy74zcZ3tLUZoi5gZ7W5u9S",
-            "RVKd61ztZW9fSh3M9V4xv3eVv7HqX4dQcUoWvJd9J9F"
-          ]
-        },
+        { mentions: ["HACLKPh6WQ79gP9NuufSs9VkDUjVsk5wCdbBCjTLpump"] },
         { commitment: "processed" }
       ]
     }));
+  });
+
+  ws.on("error", (err) => {
+    console.error("WS error:", err.message);
   });
 
   ws.on("message", async (msg) => {
@@ -151,20 +153,11 @@ function startHeliusWebSocket() {
   ws.on("close", () => {
     setTimeout(startHeliusWebSocket, 3000);
   });
-
-  ws.on("error", () => {});
 }
 
 const PORT = 3000;
-let wsStartedOnce = false;
 
 app.listen(PORT, () => {
-  if (wsStartedOnce) return;
-  wsStartedOnce = true;
-  console.log("Server listening on port 3000");
-  try {
-    startHeliusWebSocket();
-  } catch (err) {
-    console.error("startHeliusWebSocket failed:", err);
-  }
+  console.log(`Server listening on port ${PORT}`);
+  startHeliusWebSocket();
 });
